@@ -295,6 +295,8 @@ fork(void)
 
   np->state = RUNNABLE;
 
+  np->tflags = p->tflags;
+
   release(&np->lock);
 
   return pid;
@@ -692,4 +694,16 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+//Set trace flag bits in the proccess.
+void 
+trace(int flag)
+{
+  struct proc *p;
+
+  p = myproc();
+  acquire(&p->lock);
+  p->tflags = flag;
+  release(&p->lock);
 }
