@@ -23,7 +23,7 @@ int main(int ac,char *av[]){
             i = ac -1;
             for(aft = 0,bef = 0;;aft++){
                 if(buf[aft] == ' ' || buf[aft] == '\0' || buf[aft] == '\n'){
-                    //printf("i:%d aft:%d bef:%d\n",i,aft,bef);
+                    
                     if(aft - bef > 0){
                         argv[i] = (char *)malloc(aft - bef + 1);
                         int k = 0;

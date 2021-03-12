@@ -3,7 +3,7 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
-#define MAX_LEN 1024
+#define MAX_LEN 256
 
 int unvalid_dir(char name[]){
     if(strcmp(name,".") == 0 || strcmp(name,"..") == 0 || strlen(name) == 0) return 1;

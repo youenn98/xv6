@@ -10,14 +10,21 @@ main(){
     int p_id;
     char buff[2];
     if(fork() == 0){
+        close(pipes[1]);
+        close(pipes[2]);
+
         p_id = getpid();
         //wait to read successfully from pipe
         while(read(pipes[0],buff,1) <= 0);
+        close(pipes[0]);
         printf("%d: received ping\n",p_id);
         //send parent a byte
         write(pipes[3],"a",1);
+        close(pipes[3]);
         exit(0);
     }else{
+        close(pipes[0]);
+        close(pipes[3]);
         p_id = getpid();
         //send child a byte
         write(pipes[1],"b",1);
