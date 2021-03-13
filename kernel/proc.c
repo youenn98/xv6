@@ -696,7 +696,7 @@ procdump(void)
   }
 }
 
-//Set trace flag bits in the proccess.
+//Set trace flag bits in the process.
 void 
 trace(int flag)
 {
@@ -706,4 +706,20 @@ trace(int flag)
   acquire(&p->lock);
   p->tflags = flag;
   release(&p->lock);
+}
+
+uint64
+freeproccnt(void)
+{
+  uint64 cnt = 0;
+  struct proc * p;
+  for (p = proc; p < &proc[NPROC]; p++)
+  { 
+    acquire(&p->lock);
+    if(p->state != UNUSED){
+      cnt++;
+    }
+    release(&p->lock);
+  }
+  return cnt;
 }
