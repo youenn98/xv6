@@ -67,6 +67,26 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+    if(which_dev == 2){
+      if((p->ahandler != 0 || p->ainterval != 0) && p->basetick > 0){
+
+        uint xticks;
+        acquire(&tickslock);
+        xticks = ticks;
+        release(&tickslock);
+
+        if(xticks - p->basetick >= p->ainterval){
+          acquire(&p->lock);
+          p->basetick = -1;
+          memmove(&p->userframe,p->trapframe,sizeof(p->userframe));
+          p->trapframe->epc = (uint64)p->ahandler;
+          release(&p->lock);
+
+          if(p->killed) exit(-1);
+          usertrapret();
+        }
+      }
+    }
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
@@ -218,3 +238,17 @@ devintr()
   }
 }
 
+
+void backtrace(){
+  uint64 * fp = (uint64 *)r_fp();
+  uint64 stack_top = PGROUNDUP((uint64)fp);
+  uint64 stack_bot = PGROUNDDOWN((uint64)fp);
+
+  printf("backtrace:\n");
+  while(fp != 0 && (uint64)fp < stack_top && (uint64)fp >= stack_bot){
+    printf("%p\n",*(fp - 1));
+    uint64 * fp_next = (uint64 *)(*(fp - 2));
+    if(fp_next == fp) break;
+    fp = fp_next;
+  }
+}
