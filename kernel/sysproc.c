@@ -112,9 +112,7 @@ sys_sigalarm()
   proc->ainterval = ticks;
   proc->ahandler = (void (*)())handler;
 
-  acquire(&tickslock);
-  proc->basetick = ticks;
-  release(&tickslock);
+  proc->tickcnt = 0;
 
   return 0;
 }
@@ -125,12 +123,7 @@ sys_sigreturn(void)
   struct proc * p = myproc();
   acquire(&p->lock);
   memmove(p->trapframe,&p->userframe,sizeof(p->userframe));
-
-  uint xticks;
-  acquire(&tickslock);
-  xticks = ticks;
-  release(&tickslock);
-  p->basetick = xticks;
+  p->tickcnt = 0;
 
   if(p->killed) exit(-1);
   release(&p->lock);

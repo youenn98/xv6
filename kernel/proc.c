@@ -128,7 +128,7 @@ found:
   p->context.sp = p->kstack + PGSIZE;
 
   //zero values for alarm interupt
-  p->basetick  = 0;
+  p->tickcnt  = 0;
   p->ainterval = 0;
   p->ahandler  = 0;
 

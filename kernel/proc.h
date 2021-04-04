@@ -97,8 +97,8 @@ struct proc {
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
-  int ainterval;            // Alarm inteval
-  int basetick;             // start time of sigalarm called
+  int ainterval;                // Alarm inteval
+  int tickcnt;                  //  tick count 
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
   struct trapframe userframe; // user data for restore from handler 

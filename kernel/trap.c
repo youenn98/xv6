@@ -68,20 +68,14 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
     if(which_dev == 2){
-      if((p->ahandler != 0 || p->ainterval != 0) && p->basetick > 0){
+      if(p->ahandler != 0 || p->ainterval != 0){
+        p->tickcnt++;
 
-        uint xticks;
-        acquire(&tickslock);
-        xticks = ticks;
-        release(&tickslock);
-
-        if(xticks - p->basetick >= p->ainterval){
+        if(p->tickcnt == p->ainterval){
           acquire(&p->lock);
-          p->basetick = -1;
           memmove(&p->userframe,p->trapframe,sizeof(p->userframe));
           p->trapframe->epc = (uint64)p->ahandler;
           release(&p->lock);
-
           if(p->killed) exit(-1);
           usertrapret();
         }
