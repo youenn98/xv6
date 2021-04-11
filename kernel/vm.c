@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -157,7 +159,7 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
     if(*pte & PTE_V)
-      panic("remap");
+      continue;
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -181,9 +183,9 @@ uvmunmap(pagetable_t pagetable, uint64 va, uint64 npages, int do_free)
 
   for(a = va; a < va + npages*PGSIZE; a += PGSIZE){
     if((pte = walk(pagetable, a, 0)) == 0)
-      panic("uvmunmap: walk");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmunmap: not mapped");
+      continue;
     if(PTE_FLAGS(*pte) == PTE_V)
       panic("uvmunmap: not a leaf");
     if(do_free){
@@ -283,6 +285,7 @@ freewalk(pagetable_t pagetable)
       freewalk((pagetable_t)child);
       pagetable[i] = 0;
     } else if(pte & PTE_V){
+      return;
       panic("freewalk: leaf");
     }
   }
@@ -315,9 +318,9 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
-      panic("uvmcopy: pte should exist");
+      continue;
     if((*pte & PTE_V) == 0)
-      panic("uvmcopy: page not present");
+      continue;
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
     if((mem = kalloc()) == 0)
@@ -359,8 +362,15 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if(pa0 == 0){
+      if(dstva + len > myproc()->sz){
+        return -1;
+      }
+      if(uvmalloc(pagetable,va0,va0 + PGSIZE) == 0)  return -1;
+      pa0 = walkaddr(pagetable, va0);
+    }
+    if(pa0 == 0) return -1;
+
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -380,12 +390,18 @@ int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
   uint64 n, va0, pa0;
-
+ 
   while(len > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+
+    if(pa0 == 0){
+      if(srcva + len > myproc()->sz) return -1;
+      if(uvmalloc(pagetable, va0, va0 + PGSIZE) == 0)  return -1;
+      pa0 = walkaddr(pagetable, va0);
+    }
+    if(pa0 == 0) return -1;
+      
     n = PGSIZE - (srcva - va0);
     if(n > len)
       n = len;
@@ -411,8 +427,11 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   while(got_null == 0 && max > 0){
     va0 = PGROUNDDOWN(srcva);
     pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
+
+    if(pa0 == 0){
       return -1;
+    }
+
     n = PGSIZE - (srcva - va0);
     if(n > max)
       n = max;
