@@ -10,15 +10,34 @@
 #define STACK_SIZE  8192
 #define MAX_THREAD  4
 
+// Saved registers for kernel context switches.
+struct ucontext {
+  uint64 ra;
+  uint64 sp;
+
+  // callee-saved
+  uint64 s0;
+  uint64 s1;
+  uint64 s2;
+  uint64 s3;
+  uint64 s4;
+  uint64 s5;
+  uint64 s6;
+  uint64 s7;
+  uint64 s8;
+  uint64 s9;
+  uint64 s10;
+  uint64 s11;
+};
 
 struct thread {
   char       stack[STACK_SIZE]; /* the thread's stack */
+  struct ucontext context;
   int        state;             /* FREE, RUNNING, RUNNABLE */
-
 };
 struct thread all_thread[MAX_THREAD];
 struct thread *current_thread;
-extern void thread_switch(uint64, uint64);
+extern void thread_switch(struct ucontext *, struct ucontext *);
               
 void 
 thread_init(void)
@@ -32,6 +51,13 @@ thread_init(void)
   current_thread->state = RUNNING;
 }
 
+void show_state(){
+  for(int i = 0; i < MAX_THREAD;i++){
+    printf("%d ",all_thread[i].state);
+  }
+  printf("\n");
+}
+
 void 
 thread_schedule(void)
 {
@@ -40,9 +66,14 @@ thread_schedule(void)
   /* Find another runnable thread. */
   next_thread = 0;
   t = current_thread + 1;
+
+  //show_state();
+
+
   for(int i = 0; i < MAX_THREAD; i++){
     if(t >= all_thread + MAX_THREAD)
       t = all_thread;
+    
     if(t->state == RUNNABLE) {
       next_thread = t;
       break;
@@ -59,12 +90,19 @@ thread_schedule(void)
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
+    //show_state();
+    //printf("%d\n",current_thread - all_thread);
     /* YOUR CODE HERE
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
      */
-  } else
+    thread_switch(&t->context,&current_thread->context);
+    
+
+  } else{
+    //printf("bad\n");
     next_thread = 0;
+  }
 }
 
 void 
@@ -77,13 +115,16 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
+  t->context.ra = (uint64)func;
+  t->context.sp = (uint64)t->stack + STACK_SIZE;
 }
 
 void 
 thread_yield(void)
 {
   current_thread->state = RUNNABLE;
-  thread_schedule();
+  thread_schedule();  // a RUNNABLE thread.
+
 }
 
 volatile int a_started, b_started, c_started;
@@ -97,7 +138,7 @@ thread_a(void)
   a_started = 1;
   while(b_started == 0 || c_started == 0)
     thread_yield();
-  
+
   for (i = 0; i < 100; i++) {
     printf("thread_a %d\n", i);
     a_n += 1;
