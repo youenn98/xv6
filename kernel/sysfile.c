@@ -484,3 +484,81 @@ sys_pipe(void)
   }
   return 0;
 }
+
+uint64
+sys_mmap(void)
+{ 
+  int len,prot,flag,fd;
+  struct file * pf;
+  
+  if(argint(1,&len) < 0 || argint(2,&prot) < 0 || argint(3,&flag) < 0 || argfd(4,&fd,&pf) < 0){
+    return -1;
+  }
+  if(pf->writable == 0 && (prot)&PROT_WRITE && flag & MAP_SHARED) return -1;
+
+  struct proc *p = myproc();
+
+  len = PGROUNDUP(len);
+
+  for(int i = 0;i < NVMA;i++){
+    if(p->vmas[i].used == 0){
+      p->vmas[i].filep = filedup(pf);
+      p->vmas[i].used = 1;
+
+      p->vmas[i].address = p->mmapsz + VMABASE;
+      p->vmas[i].length = len;
+      p->mmapsz += len;
+
+      p->vmas[i].prot = prot;
+      p->vmas[i].flag = flag;
+      //printf("filesize:%d\n",pf->ip->size);
+      return p->vmas[i].address;
+    }
+  }
+  return -1;
+}
+
+uint64
+sys_munmap(void)
+{ 
+  uint64 addr;
+  int unmap_sz;
+  struct proc *p = myproc();
+
+  if(argaddr(0,&addr) < 0 || argint(1,&unmap_sz) < 0) return -1;
+  for(int i = 0; i < NVMA;i++){
+      if(p->vmas[i].used && p->vmas[i].address <= addr &&p->vmas[i].address + p->vmas[i].length > addr){
+
+          for(int offset = 0;offset < unmap_sz;offset += PGSIZE){
+            if(walkaddr(p->pagetable,addr + offset) == 0) continue;
+            if(p->vmas[i].flag == MAP_SHARED){
+                int wirte_size = PGSIZE;
+                if(unmap_sz - offset < PGSIZE){
+                    wirte_size = unmap_sz - offset;
+                }
+                begin_op();ilock(p->vmas[i].filep->ip);
+                writei(p->vmas[i].filep->ip,1,offset+addr,offset + addr-p->vmas[i].address,wirte_size);
+                end_op();iunlock(p->vmas[i].filep->ip);
+            }
+            uvmunmap(p->pagetable,addr + offset,1,1);
+          }
+      
+        if(addr + unmap_sz == p->vmas[i].address + p->vmas[i].length){
+          p->vmas[i].length = addr - p->vmas[i].address;
+        }else if(addr == p->vmas[i].address){
+          p->vmas[i].length -= unmap_sz;
+          p->vmas[i].address = addr + unmap_sz;
+        }
+        if(p->vmas[i].length == 0){
+          p->vmas[i].used = 0;
+          fileclose(p->vmas[i].filep);
+        }
+    }
+
+  }
+
+
+
+
+  return 0;
+}

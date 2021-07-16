@@ -12,8 +12,10 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
+#include "fcntl.h"
 
 struct devsw devsw[NDEV];
+
 struct {
   struct spinlock lock;
   struct file file[NFILE];
@@ -62,8 +64,10 @@ fileclose(struct file *f)
   struct file ff;
 
   acquire(&ftable.lock);
-  if(f->ref < 1)
-    panic("fileclose");
+  if(f->ref < 1){
+    release(&ftable.lock);
+    return;
+  }
   if(--f->ref > 0){
     release(&ftable.lock);
     return;
@@ -180,3 +184,25 @@ filewrite(struct file *f, uint64 addr, int n)
   return ret;
 }
 
+
+int handle_page(uint64 stval,struct proc *p){
+  for(int i = 0;i < NVMA;i++){
+    
+    if(p->vmas[i].used && p->vmas[i].address <= stval && p->vmas[i].address + p->vmas[i].length > stval){
+        uint64 addr = PGROUNDDOWN(stval);
+        int perm = PTE_U;
+        if(p->vmas[i].prot & PROT_READ) perm |= PTE_R;
+        if(p->vmas[i].prot & PROT_WRITE) perm |= PTE_W;
+        if(p->vmas[i].prot & PROT_EXEC) perm |= PTE_X;
+
+        char * pa = kalloc();if(pa == 0) return -1;
+        mappages(p->pagetable,addr,PGSIZE,(uint64)pa,perm);
+        begin_op();ilock(p->vmas[i].filep->ip);
+        readi(p->vmas[i].filep->ip,1,addr,addr - p->vmas[i].address,PGSIZE);
+        iunlock(p->vmas[i].filep->ip);end_op();
+        //printf("%d\n",addr - p->vmas[i].address);
+        return 0;
+    }
+  }
+  return -1;
+}

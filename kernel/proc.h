@@ -18,6 +18,19 @@ struct context {
   uint64 s11;
 };
 
+//virtual memory address
+struct vma
+{ 
+  struct file * filep;
+  struct spinlock lock;
+  uint64 address;
+  uint64 length;
+  int   fd;
+  short prot;
+  short flag;
+  short used;
+};
+
 // Per-CPU state.
 struct cpu {
   struct proc *proc;          // The process running on this cpu, or null.
@@ -97,10 +110,12 @@ struct proc {
   // these are private to the process, so p->lock need not be held.
   uint64 kstack;               // Virtual address of kernel stack
   uint64 sz;                   // Size of process memory (bytes)
+  uint64 mmapsz;               // Size of mmap.
   pagetable_t pagetable;       // User page table
   struct trapframe *trapframe; // data page for trampoline.S
   struct context context;      // swtch() here to run process
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  struct vma vmas[NVMA];
 };

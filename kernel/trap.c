@@ -5,6 +5,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "fcntl.h"
+//#include "file.h"
 
 struct spinlock tickslock;
 uint ticks;
@@ -68,9 +70,22 @@ usertrap(void)
   } else if((which_dev = devintr()) != 0){
     // ok
   } else {
-    printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
-    printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
-    p->killed = 1;
+    if(r_scause() == 13 || r_scause() == 15){
+      uint64 stval =  r_stval();
+      if(stval >=  VMABASE && stval < MAXVA){
+        //printf("stval:%p\n",stval);
+        if(handle_page(stval,p) == -1){
+          p->killed = 1;
+        }
+      }else{
+        p->killed = 1;
+      }
+    }
+    else{
+      printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
+      printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
+      p->killed = 1;
+    }
   }
 
   if(p->killed)
@@ -217,4 +232,3 @@ devintr()
     return 0;
   }
 }
-

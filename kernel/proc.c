@@ -134,6 +134,10 @@ found:
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
 
+ for(int i = 0;i < NVMA;i++){
+    p->vmas[i].used = 0;
+  }
+  p->mmapsz = 0;
   return p;
 }
 
@@ -147,7 +151,7 @@ freeproc(struct proc *p)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
   if(p->pagetable)
-    proc_freepagetable(p->pagetable, p->sz);
+    proc_freepagetable(p->pagetable, p->sz,p->mmapsz);
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -157,6 +161,10 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  for(int i = 0;i < NVMA;i++){
+    p->vmas[i].used = 0;
+  }
+  p->mmapsz = 0;
 }
 
 // Create a user page table for a given process,
@@ -195,10 +203,11 @@ proc_pagetable(struct proc *p)
 // Free a process's page table, and free the
 // physical memory it refers to.
 void
-proc_freepagetable(pagetable_t pagetable, uint64 sz)
+proc_freepagetable(pagetable_t pagetable, uint64 sz,uint64 mmapsz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  uvmunmap(pagetable,VMABASE,mmapsz >> PGSHIFT,1);
   uvmfree(pagetable, sz);
 }
 
@@ -275,7 +284,7 @@ fork(void)
   }
 
   // Copy user memory from parent to child.
-  if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
+  if(uvmcopy(p->pagetable, np->pagetable, p->sz,p->mmapsz) < 0){
     freeproc(np);
     release(&np->lock);
     return -1;
@@ -301,6 +310,15 @@ fork(void)
   pid = np->pid;
 
   np->state = RUNNABLE;
+
+  np->mmapsz = p->mmapsz;
+  for (int i = 0; i < NVMA; i++)
+  {
+    if(p->vmas[i].used){
+      np->vmas[i] = p->vmas[i];
+    }
+  }
+  
 
   release(&np->lock);
 
@@ -351,6 +369,16 @@ exit(int status)
       fileclose(f);
       p->ofile[fd] = 0;
     }
+  }
+
+  for(int i = 0; i < NVMA;i++){
+    /*
+    if(p->vmas[i].used){
+      fileclose(p->vmas[i].filep);
+    }
+    */
+    p->vmas[i].used = 0;
+    p->mmapsz = 0;
   }
 
   begin_op();
